@@ -10,7 +10,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$RepoOwner = "YOUR_USERNAME",
+    [string]$RepoOwner = "BibekG1",
     [string]$RepoName  = "SmartDiskThrottle",
     [string]$Branch    = "main",
     [string]$InstallPath = "C:\Scripts"
