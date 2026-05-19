@@ -19,6 +19,7 @@ param(
 # === 🔐 Run as Administrator Check ===
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "❌ Please run as Administrator. Right-click PowerShell → 'Run as Administrator'" -ForegroundColor Red
+    Read-Host -Prompt "Press Enter to exit"
     exit 1
 }
 
@@ -31,49 +32,63 @@ $taskUrl   = "$baseUrl/SmartDiskThrottle_Task.xml"
 Write-Host "📥 Downloading SmartDiskThrottle v1.2..." -ForegroundColor Cyan
 
 try {
-    # Create install directory
     if (-not (Test-Path $InstallPath)) {
         New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
     }
 
-    # Download script
     $scriptPath = Join-Path $InstallPath "SmartDiskThrottle.ps1"
     Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -UseBasicParsing -ErrorAction Stop
     Write-Host "✅ Script downloaded: $scriptPath" -ForegroundColor Green
 
-    # Download task XML
     $taskPath = Join-Path $InstallPath "SmartDiskThrottle_Task.xml"
     Invoke-WebRequest -Uri $taskUrl -OutFile $taskPath -UseBasicParsing -ErrorAction Stop
     Write-Host "✅ Task config downloaded: $taskPath" -ForegroundColor Green
 
 } catch {
     Write-Host "❌ Download failed: $_" -ForegroundColor Red
-    Write-Host "💡 Check: 1) Internet connection 2) GitHub URL is public 3) Correct repo/branch" -ForegroundColor Yellow
+    Write-Host "💡 Check: 1) Internet 2) GitHub URL is public 3) Correct repo/branch" -ForegroundColor Yellow
+    Read-Host -Prompt "Press Enter to exit"
     exit 1
 }
 
-# === ⚙️ Configure Execution Policy (if needed) ===
+# === ⚙️ Configure Execution Policy ===
 $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser -ErrorAction SilentlyContinue
 if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'AllSigned') {
     Write-Host "🔓 Setting ExecutionPolicy to RemoteSigned (current user only)..." -ForegroundColor Yellow
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
 }
 
-# === 🗓️ Import Task Scheduler Task ===
+# === 🗓️ Register Task Scheduler Task (Robust Method) ===
 Write-Host "🗓️ Registering Task Scheduler task..." -ForegroundColor Cyan
 try {
-    # Unregister if exists (clean reinstall)
+    # Clean up existing task first
     Get-ScheduledTask -TaskName "SmartDiskThrottle" -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 
-    # Import new task
-    Register-ScheduledTask -Xml (Get-Content $taskPath | Out-String) -TaskName "SmartDiskThrottle" -Force -ErrorAction Stop
-    Write-Host "✅ Task 'SmartDiskThrottle' registered successfully" -ForegroundColor Green
+    # Read XML with correct encoding (UTF-16 as declared in file)
+    $xmlContent = Get-Content -Path $taskPath -Raw -Encoding UTF8
 
-    # Enable the task
+    # Register the task
+    Register-ScheduledTask -Xml $xmlContent -TaskName "SmartDiskThrottle" -Force -ErrorAction Stop
+
+    # Enable and verify
     Enable-ScheduledTask -TaskName "SmartDiskThrottle" -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    $task = Get-ScheduledTask -TaskName "SmartDiskThrottle" -ErrorAction Stop
+
+    if ($task.State -eq 'Ready') {
+        Write-Host "✅ Task 'SmartDiskThrottle' registered and ready" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️ Task registered but state is: $($task.State)" -ForegroundColor Yellow
+    }
 
 } catch {
     Write-Host "❌ Task registration failed: $_" -ForegroundColor Red
+    Write-Host "`n🔧 Try manual import:" -ForegroundColor Yellow
+    Write-Host "1. Open Task Scheduler as Admin" -ForegroundColor Gray
+    Write-Host "2. Right-click 'Task Scheduler Library' → 'Import Task...'" -ForegroundColor Gray
+    Write-Host "3. Select: $taskPath" -ForegroundColor Gray
+    Write-Host "4. Click OK and confirm" -ForegroundColor Gray
+    Read-Host -Prompt "Press Enter to exit"
     exit 1
 }
 
@@ -86,10 +101,10 @@ if ($task -and $task.State -eq 'Ready') {
     Write-Host "🔄 Task will start automatically at next login (with 1-min delay)" -ForegroundColor Gray
     Write-Host "`n🛠️ To manage: Open Task Scheduler → Library → SmartDiskThrottle" -ForegroundColor Gray
 } else {
-    Write-Host "⚠️ Task registered but not in 'Ready' state. Please check Task Scheduler manually." -ForegroundColor Yellow
+    Write-Host "⚠️ Task not in 'Ready' state. Please check Task Scheduler manually." -ForegroundColor Yellow
 }
 
-# === 🎯 Quick Commands Reference ===
+# === 🎯 Quick Reference ===
 Write-Host "`n📋 Quick Reference:" -ForegroundColor Cyan
 Write-Host "  • Pause throttling:    Disable task in Task Scheduler" -ForegroundColor Gray
 Write-Host "  • View logs:           notepad `"$env:TEMP\SmartDiskThrottle.log`"" -ForegroundColor Gray
@@ -97,3 +112,4 @@ Write-Host "  • Uninstall:           Unregister-ScheduledTask -TaskName 'Smart
 Write-Host "  • Update:              Re-run this installer" -ForegroundColor Gray
 
 Write-Host "`n🎉 Installation complete! Reboot to activate." -ForegroundColor Green
+Read-Host -Prompt "Press Enter to exit"
