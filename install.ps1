@@ -5,7 +5,7 @@
     Downloads, installs, and configures SmartDiskThrottle to run automatically at login.
     Requires Administrator privileges.
 .LINK
-    https://github.com/Evan522/SmartDiskThrottle
+    https://github.com/BibekG1/SmartDiskThrottle
 #>
 
 [CmdletBinding()]
