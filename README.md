@@ -3,7 +3,7 @@
 **Automated, adaptive I/O throttling for Windows 10/11**  
 *Silently detects sustained high I/O background processes and applies `Idle` priority to keep your system responsive — zero manual intervention required.*
 
-> ✨ **New in v1.2**: Multi-instance I/O aggregation, garbage collection for zero memory drift, production-ready for 24/7 background execution.
+> ✨ **New in v1.2**: Multi-instance I/O aggregation, garbage collection for zero memory drift, native PowerShell task creation (no XML imports), production-ready for 24/7 background execution.
 
 ---
 
@@ -18,9 +18,9 @@ irm https://raw.githubusercontent.com/BibekG1/SmartDiskThrottle/main/install.ps1
 ### ✅ What This Does:
 | Step | Action |
 |------|--------|
-| 1️⃣ | Downloads `SmartDiskThrottle.ps1` + `SmartDiskThrottle_Task.xml` to `C:\Scripts\` |
+| 1️⃣ | Downloads `SmartDiskThrottle.ps1` to `C:\Scripts\` |
 | 2️⃣ | Sets `RemoteSigned` ExecutionPolicy for current user (if needed) |
-| 3️⃣ | Registers a Task Scheduler task that runs at login (with 1-min delay) |
+| 3️⃣ | Creates a Task Scheduler task using native PowerShell cmdlets (no XML parsing) |
 | 4️⃣ | Verifies installation and shows next steps |
 
 ### 🔐 Safety First:
@@ -34,18 +34,24 @@ irm https://raw.githubusercontent.com/BibekG1/SmartDiskThrottle/main/install.ps1
 ## 📦 Manual Deployment (Alternative)
 
 Prefer to inspect files first? Here's how to install manually:
-```markdown
-### Step 1: Download Files
-1. Download `src/SmartDiskThrottle.ps1` → Save to `C:\Scripts\SmartDiskThrottle.ps1`
-2. Download `src/SmartDiskThrottle_Task.xml` → Save to `C:\Scripts\SmartDiskThrottle_Task.xml`
 
-### Step 2: Import Task Scheduler Task
-1. Open **Task Scheduler** as Administrator
-2. Right-click **Task Scheduler Library** → **Import Task...**
-3. Select `C:\Scripts\SmartDiskThrottle_Task.xml` → Click **OK**
-4. Confirm the task is **Enabled** and set to run with **Highest privileges**
+### Step 1: Download Core Script
+1. Download `src/SmartDiskThrottle.ps1` → Save to `C:\Scripts\SmartDiskThrottle.ps1`
+
+### Step 2: Create Scheduled Task
+Run this in **Administrator PowerShell**:
+```powershell
+$scriptPath = "C:\Scripts\SmartDiskThrottle.ps1"
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File `"$scriptPath`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$trigger.Delay = "PT1M"
+$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Administrators" -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Minutes 0) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5)
+Register-ScheduledTask -TaskName "SmartDiskThrottle" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+```
 
 ### Step 3: Verify
+- Open Task Scheduler → Verify `SmartDiskThrottle` is **Enabled**
 - Reboot or manually run the task once
 - Check logs at `%TEMP%\SmartDiskThrottle.log`
 - Open Task Manager → Details tab → Add `Priority` column → Throttled apps show `Idle`
@@ -62,7 +68,7 @@ Prefer to inspect files first? Here's how to install manually:
 | `$cooldownChecks` | `5` | Prevents priority thrashing after a process drops below threshold. |
 
 > 💡 **Tip**: After editing, re-run the one-liner installer to update the installed script.
-```
+
 ---
 
 ## 🔍 How It Works
@@ -85,7 +91,7 @@ Prefer to inspect files first? Here's how to install manually:
 | **Volatile Priority Changes** | `PriorityClass` adjustments exist only in RAM — reboot resets everything |
 | **No Registry/Service Edits** | Pure PowerShell using native Windows APIs; no persistent system changes |
 | **Transparent Code** | Fully open, well-commented, no obfuscation or hidden payloads |
-| **Task Scheduler Integration** | Runs with standard Windows scheduling; easy to disable/uninstall |
+| **Native Task Creation** | Uses built-in `Register-ScheduledTask` cmdlets — no XML encoding/parsing issues |
 
 ### ⚠️ Known Limitations:
 | Limitation | Workaround |
@@ -106,7 +112,6 @@ Prefer to inspect files first? Here's how to install manually:
 | **Log not updating** | Check execution policy: Run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` in PowerShell |
 | **Need to pause temporarily** | Disable task in Task Scheduler → re-enable when ready (no uninstall needed) |
 | **Verify active throttling** | Task Manager → Details tab → Right-click headers → `Select columns` → ✅ `Priority` → Throttled apps show `Idle` |
-| **Task fails to start** | Ensure `C:\Scripts\` folder exists and contains both `.ps1` and `.xml` files; check Task Scheduler "Last Run Result" |
 
 ---
 
@@ -130,9 +135,9 @@ irm https://raw.githubusercontent.com/BibekG1/SmartDiskThrottle/main/install.ps1
 ```
 
 The installer automatically:
-- Backs up existing files (if needed)
-- Downloads the latest `SmartDiskThrottle.ps1` and `.xml`
-- Re-registers the Task Scheduler task with updated settings
+- Downloads the latest `SmartDiskThrottle.ps1`
+- Re-creates the Task Scheduler task with updated settings
+- Preserves your existing configuration
 
 ---
 
@@ -173,15 +178,3 @@ Found a bug? Want a feature?
 > 💬 **Final Note**: SmartDiskThrottle is designed to be "set and forget." After installation, it runs silently in the background, adapting to your usage patterns. If you ever need to pause it, just disable the task in Task Scheduler — no cleanup required. 🛠️✨
 ```
 
----
-
-### ✅ Key Improvements Made:
-1.  **One-Click Install at the Top**: Users see the easiest method first.
-2.  **Clear "What This Does" Table**: Builds trust by explaining exactly what the installer does.
-3.  **Safety Checklist Prominently Placed**: Right before troubleshooting, so users verify before running.
-4.  **Added "Updating" and "Uninstall" Sections**: Critical for user confidence and long-term use.
-5.  **Better Visual Hierarchy**: Emojis, tables, and callouts make it scannable.
-6.  **Contributing/Support Section**: Encourages community engagement.
-7.  **Your GitHub Username Pre-Filled**: `BibekG1` is already in the one-liner — ready to copy-paste.
-
-Save this as `README.md` in your repo root, and it's ready for public sharing. 🚀
