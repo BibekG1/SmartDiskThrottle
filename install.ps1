@@ -52,8 +52,15 @@ try {
     # Clean up existing
     Get-ScheduledTask -TaskName "SmartDiskThrottle" -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 
-    # Action
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File `"$scriptPath`""
+    # Create a tiny VBScript launcher to launch powershell.exe completely silent with SW_HIDE (0)
+    $launcherPath = Join-Path $InstallPath "SmartDiskThrottle_Launcher.vbs"
+    $vbsContent = @"
+CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""$scriptPath""", 0, False
+"@
+    Set-Content -Path $launcherPath -Value $vbsContent -Force -Encoding ASCII
+
+    # Action (Executes wscript.exe with the launcher argument)
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$launcherPath`""
 
     # Trigger (At logon + 1 min delay)
     $trigger = New-ScheduledTaskTrigger -AtLogOn
